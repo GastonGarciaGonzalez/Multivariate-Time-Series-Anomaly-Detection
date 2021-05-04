@@ -63,7 +63,6 @@ X_test = St.transform(X_test)
 
 experiment.log_dataset_info(name='SWaT_Normalv1_Attackv0')
 
-
 window = 240
 steps = window // 8
 experiment.log_parameter('wondow', window)
@@ -84,10 +83,10 @@ X_test = create_sequences(X_test, time_steps=window)
 # --- model training --- #
 model = MTSAD_CNN_VAE(sequence_length=window,
                       number_of_vars=51,
-                      hidden_units_e=16,
-                      hidden_units_d=16,
+                      hidden_units_e=32,
+                      hidden_units_d=32,
                       batch_size=32,
-                      latent_dim=9,
+                      latent_dim=18,
                       epochs=200,
                       learning_rate=1e-3,
                       decay_rate=0.96,

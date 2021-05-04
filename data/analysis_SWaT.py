@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun May  2 21:08:22 2021
+
+@author: gastong@fing.edu.uy
+"""
+
 from zipfile import ZipFile
 import pandas as pd
 
