@@ -98,7 +98,6 @@ model.train(X_train, X_val)
 pd.DataFrame(model.vae.history.history).plot()
 plt.grid()
 
-
 ix_anomaly, rec = model.detect(X_test, th=1e-3)
 
 error = np.abs((X_test - rec))

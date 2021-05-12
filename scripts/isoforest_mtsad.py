@@ -7,134 +7,64 @@ Created on Sat Apr 24 18:37:31 2021
 
 # import comet_ml at the top of your file
 from comet_ml import Experiment
+from AD import ISO_FOREST_AD, plot_score, precision_recall, predict
+from datasets import swat, wadi
 
+#data
+data = 'swat'
+if data=='swat':
+    X_train, X_val, X_test, y_train, y_val, y_test = swat()
+    labels=[1, 0]
+elif data=='wadi':
+    X_train, X_val, X_test, y_train, y_val, y_test = wadi()
+    labels=[-1, 1]
+    
 #Create an experiment with your api key
 experiment = Experiment(
-    api_key="2mO83hWSVG9aCk8MSq1ANHK2A",
-    project_name="multivariate-time-series-anomaly-detection",
-    workspace="gastongarciagonzalez",
+    api_key="VZhK7C4klolOVuvJAQ1OrekYt",
+    project_name="mts-anomaly-detection",
+    workspace="gastong",
     auto_param_logging=False,
     auto_metric_logging=False,
 )
 
-experiment.add_tags(['isoforest', 'swat'])
+experiment.set_name('isoforest')
 
-from zipfile import ZipFile
-import pandas as pd
-import numpy as np
-from matplotlib import pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import precision_recall_curve
-from sklearn.metrics import average_precision_score
+n_est = 50
+max_samp = 0.95
+max_feat = 0.95
+bootstrap = True
 
+IF = ISO_FOREST_AD(n_est, max_samp, max_feat, bootstrap)
+IF.fit(X_train)
+#score_train = IF.score(X_train)
+#score_val = IF.score(X_val)
+score_test = IF.score(X_test)
 
-#data
-zip_file = ZipFile('../data/SWaT.zip')
-df_train = pd.read_csv(zip_file.open('SWaT/Physical/SWaT_Dataset_Normal_v1.csv'))
-df_test = pd.read_csv(zip_file.open('SWaT/Physical/SWaT_Dataset_Attack_v0.csv'))
-    #se quita las primeras 4 horas ya que presenta un transitorio.
-df_train[' Timestamp'] = pd.to_datetime(df_train[' Timestamp'])
-th_time = df_train[' Timestamp'][0] + pd.Timedelta('4H')
-df_train = df_train[df_train[' Timestamp'] > th_time]
+ap, f1, precision, recall, f1_max_th, fig_pre_rec, fig_th_pre_rec = precision_recall(y_test, 
+                                                       score_test,
+                                                       limit=1000,
+                                                       label_anomaly=labels[0])
 
+#fig_score_train = plot_score(score_train, 'train')
+#fig_score_val = plot_score(score_val, 'validation')
+fig_score_test = plot_score(score_test, 'test', 10, labels=y_test, th=f1_max_th)
 
-X = df_train.iloc[:,1:-1].values
-y = df_train.iloc[:,-1].values
-y[y=='Attack'] = 1
-y[y=='Normal'] = 0
-y = y.astype('int')
-X_test = df_test.iloc[:,1:-1].values
-df_test.iloc[:,-1].value_counts()
-y_test = df_test.iloc[:,-1].values
-y_test[y_test=='Attack'] = 1
-y_test[y_test=='A ttack'] = 1
-y_test[y_test=='Normal'] = 0
-y_test = y_test.astype('int')
+y_pred, conf_matrix = predict(score_test, f1_max_th, y_test, labels)
 
-X_train, X_val, y_train, y_val = train_test_split(
-    X, y, test_size=0.1, shuffle=False, random_state=42)
-
-St = StandardScaler()
-X_train = St.fit_transform(X_train)
-X_val = St.transform(X_val)
-X_test = St.transform(X_test)
-
-experiment.log_dataset_info(name='SWaT_Normalv1_Attackv0')
-
-#%%
-# Isolation Forest
-from sklearn.ensemble import IsolationForest
-
-clf = IsolationForest(n_estimators=50, random_state=42, contamination=0.3).fit(X_train)
-experiment.log_parameters({'n_estimators':50
-                           , 'max_samples': 'auto'
-                           , 'contamination': 0.3
-                           , 'max_features': 1
-                           , 'bootstrap': False})
-
-score_train = -clf.score_samples(X_train)
-fig = plt.figure(figsize=[18,3])
-plt.scatter(range(len(score_train)), score_train, s=3)
-plt.grid()
-plt.title('score train')
-plt.xlabel('index')
-plt.ylabel('score_samples')
-experiment.log_figure('IsoForest_score_train', fig)
-
-score_val = -clf.score_samples(X_val)
-fig = plt.figure(figsize=[18,3])
-plt.scatter(range(len(score_val)), score_val, s=3, color="darkorange")
-plt.grid()
-plt.title('score validation')
-plt.xlabel('index')
-plt.ylabel('score_samples')
-experiment.log_figure('IsoForest_score_validation', fig)
-
-
-# h_X = pca.transform(X_test)
-# X_rec = pca.inverse_transform(h_X)
-# rmse_X_test = np.sqrt(mean_squared_error(X_test.T, X_rec.T, multioutput='raw_values'))
-# plt.figure(figsize=[18,3])
-# plt.scatter(range(len(rmse_X_test)), rmse_X_test, s=3, color="darkgreen")
-# plt.grid()
-# plt.legend(['Error test'])
-
-score_test = -clf.score_samples(X_test)
-fig = plt.figure(figsize=[18,3])
-plt.scatter(range(len(score_test)), score_test, s=3, c=y_test, label=y_test)
-plt.grid()
-plt.title('score test')
-plt.legend(['Normal_labels', 'Attack_labels'])
-plt.xlabel('index')
-plt.ylabel('rmse')
-experiment.log_figure('IsoForest_score_test', fig)
-
-precision, recall, thresholds = precision_recall_curve(y_test, score_test)
-fig = plt.figure()
-plt.fill_between(recall, precision,  color="blue", alpha=0.2)
-plt.plot(recall, precision, color="darkblue", alpha=0.6)
-plt.ylabel('Precision')
-plt.xlabel('Recall')
-plt.title('Precision-Recall (IsoForest)')
-plt.grid()
-experiment.log_figure('IsoForest_AD_precision_recall_curve', fig)
-
-experiment.log_curve(f"recall_precision", recall, precision)
-ave_precision = average_precision_score(y_test, score_test)
-experiment.log_metric('AP', ave_precision)
-
-f_score = 2*(precision * recall)/(precision + recall)
-
-fig = plt.figure()
-#idx = thresholds < 3.5
-plt.plot(thresholds, f_score[:-1])
-plt.plot(thresholds, precision[:-1])
-plt.plot(thresholds, recall[:-1])
-plt.title('f1, precision, recall')
-plt.legend(['F1', 'precision', 'recall'])
-plt.xlabel('thresholds')
-plt.grid()
-experiment.log_figure('IsoForest_AD_f1_precision_recall', fig)
+experiment.add_tags([data])
+parameters = {'n_estimators': n_est, 'max_samples': max_samp,
+              'max_features': max_feat, 'boostrap': bootstrap}
+experiment.log_parameters(parameters)
+experiment.log_metric('ap', ap)
+experiment.log_metric('f1', f1)
+experiment.log_metric('precision', precision)
+experiment.log_metric('recall', recall)
+experiment.log_metric('train_time', IF.time_)
+experiment.log_parameter('th_f1', f1_max_th)
+experiment.log_figure('score_test',fig_score_test)
+experiment.log_figure('precision_recall',fig_pre_rec)
+experiment.log_figure('th_pre_rec_f1', fig_th_pre_rec)
+experiment.log_confusion_matrix(matrix=conf_matrix, labels=labels)
 
 experiment.end()

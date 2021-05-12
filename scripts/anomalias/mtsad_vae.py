@@ -258,7 +258,6 @@ class MTSAD_CNN_VAE:
         reconstructions = self.vae.predict(observations)
 #        reconstructions = np.squeeze(reconstructions, axis=-1)
         
-        
         error = (observations - reconstructions)**2
         idx_anom = error > th
         
